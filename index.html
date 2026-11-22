@@ -105,12 +105,12 @@ const SITEDEF=[{id:'base',n:'Princes Street',sub:'38 to 40 Princes Street, Stock
  {id:'ch',n:'Charter House',sub:'50 to 72 Churchgate',rings:SITES.ch,st:4,commercial:false,line:'Hall & Co, Ollier Smurthwaite. 27 homes, approved, under way. Sold exclusively by BRIK.'}];
 let current=null,schemeG=null,shapes=[],showScheme=true,clearExisting=true,pendingGround=0;
 function centre(rings){const all=rings.flat();return all.reduce((a,q)=>[a[0]+q[0]/all.length,a[1]+q[1]/all.length],[0,0])}
-function goTo(s,dist=220){current=s;const c=centre(s.rings);const t=W(c[0],60,c[1]);const p=W(c[0]+dist*.55,60+dist*.55,c[1]+dist*.75);camera.position.copy(p);controls.target.copy(t);controls.update();
+function goTo(s,dist=220){current=s;s._fly=dist;const c=centre(s.rings);const t=W(c[0],60,c[1]);const p=W(c[0]+dist*.55,60+dist*.55,c[1]+dist*.75);camera.position.copy(p);controls.target.copy(t);controls.update();
  document.querySelectorAll('#sites button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===s.id));
  $('#info').innerHTML='<div class="k">'+s.sub+'</div><h3>'+s.n+'</h3>'+s.line;pendingGround=1;rebuild()}
 function rebuild(){if(schemeG){scene.remove(schemeG);schemeG=null}for(const m of shapes)flat.deleteShape(m);shapes=[];if(!current)return;
  const gy=groundAt(current.rings.flat().length?current.rings[0]:[]);if(gy==null){pendingGround=1;return}pendingGround=0;
- controls.target.y=gy+8;
+ controls.target.y=gy+8;if(current._fly){const c=centre(current.rings),d=current._fly;controls.target.copy(W(c[0],gy+6,c[1]));camera.position.copy(W(c[0]+d*.5,gy+d*.55,c[1]+d*.7));controls.update();current._fly=0}
  if(showScheme){schemeG=new THREE.Group();for(const r of current.rings)schemeG.add(buildScheme(r,current.st,gy,current.commercial));scene.add(schemeG)}
  if(clearExisting&&showScheme){tiles.group.updateMatrixWorld(true);const inv=tiles.group.matrixWorld.clone().invert();const up=new THREE.Vector3(0,1,0).transformDirection(inv);
   for(const r of current.rings){const shp=new THREE.Shape(r.map(q=>{const p=W(q[0],0,q[1]);return new THREE.Vector2(p.x,-p.z)}));const geo=new THREE.ShapeGeometry(shp);geo.rotateX(-Math.PI/2);const m=new THREE.Mesh(geo);m.position.y=gy+.05;m.updateMatrixWorld();m.applyMatrix4(inv);m.updateMatrixWorld();flat.addShape(m,up,{threshold:Infinity});shapes.push(m)}}}
@@ -127,9 +127,10 @@ const start=SITEDEF.find(s=>s.id===q.get('site'));
 if(q.has('x')&&q.has('z')&&!start){const x=+q.get('x'),z=+q.get('z');current=null;camera.position.copy(W(x+160,220,z+200));controls.target.copy(W(x,40,z));controls.update();$('#info').innerHTML='<div class="k">From Site Finder</div><h3>Selected area</h3>Drag to pan, right drag to orbit, scroll to zoom.'}
 else goTo(start||SITEDEF[0]);
 
-let frame=0;
+let frame=0,ptFly=q.has('x')&&q.has('z')&&!start;window.__v={camera,controls,tiles,scene};
 function loop(){requestAnimationFrame(loop);controls.update();camera.updateMatrixWorld();tiles.update();
  frame++;if(pendingGround&&frame%30===0)rebuild();
+ if(ptFly&&frame%30===0){const t=controls.target;ray.set(new THREE.Vector3(t.x,900,t.z),new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true)[0];if(h){const dy=h.point.y+6-t.y;t.y+=dy;camera.position.y+=dy;controls.update();ptFly=false}}
  if(frame%60===0){const a=tiles.getAttributions?tiles.getAttributions():[];$('#credits').textContent=a.filter(x=>x.type==='string').map(x=>x.value).join('; ')}
  renderer.render(scene,camera)}
 loop();
