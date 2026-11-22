@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>INCU Site Finder · Google 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/","3d-tiles-renderer/three":"https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.4/build/index.three.js","3d-tiles-renderer/plugins":"https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.4/build/index.plugins.js"}}</script>
+<style>
+:root{--paper:#f6f2ea;--card:#fffdf8;--ink:#14213d;--mute:#5d6676;--line:#e3ddd1;--cobalt:#2340c8}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#dfe6ee;font-family:"Space Grotesk",Arial,sans-serif;color:var(--ink)}
+canvas{display:block}
+.bar{position:fixed;top:14px;left:14px;right:14px;display:flex;gap:10px;align-items:center;pointer-events:none}
+.card{pointer-events:auto;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 24px rgba(20,33,61,.12);padding:10px 14px}
+.brand{font-weight:700;letter-spacing:.02em}.brand small{display:block;font:500 11px "DM Mono",monospace;color:var(--mute);letter-spacing:.06em;text-transform:uppercase}
+.btns{display:flex;gap:6px;flex-wrap:wrap}
+button{font:600 13px "Space Grotesk";border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:8px 14px;cursor:pointer}
+button[aria-pressed=true]{background:var(--cobalt);color:#fff;border-color:var(--cobalt)}
+a.back{font:600 13px "Space Grotesk";color:var(--cobalt);text-decoration:none;margin-left:auto}
+.attr{position:fixed;left:12px;bottom:10px;font:11px Arial,sans-serif;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);max-width:70vw;pointer-events:none}
+.attr b{font:700 16px Arial,sans-serif;letter-spacing:-.02em;margin-right:8px}
+#msg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:460px;text-align:center;display:none}
+.info{position:fixed;right:14px;bottom:14px;width:300px;font-size:13px;line-height:1.45}
+.info h3{margin:0 0 4px;font-size:16px}.info .k{font:500 11px "DM Mono",monospace;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+</style></head><body>
+<div class="bar">
+ <div class="card brand">INCU Site Finder<small>Google photorealistic 3D</small></div>
+ <div class="card btns" id="sites"></div>
+ <div class="card btns"><button id="scheme" aria-pressed="true">Show scheme</button><button id="flat" aria-pressed="true">Clear existing</button></div>
+ <a class="card back" href="https://claude.ai/artifact/DM6Q7DZS6UUjtii7XL9gLA">Back to Site Finder</a>
+</div>
+<div class="attr" id="attr"><b>Google</b><span id="credits"></span></div>
+<div class="card info" id="info"></div>
+<div class="card" id="msg"></div>
+<script type="module">
+import * as THREE from 'three';
+import { MapControls } from 'three/addons/controls/MapControls.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { TilesRenderer } from '3d-tiles-renderer/three';
+import { GoogleCloudAuthPlugin, ReorientationPlugin, GLTFExtensionsPlugin, TileCompressionPlugin, TilesFadePlugin, UpdateOnChangePlugin, TileFlatteningPlugin } from '3d-tiles-renderer/plugins';
+
+const KEY='AIzaSyBh2rJKBfvp0R1xZa-7r2KZMBNRoQlCPEk';
+const ORIGIN={lat:53.4085,lon:-2.155};
+const SITES={"base": [[[-396.5, -398.0], [-396.0, -398.0], [-388.5, -405.0], [-385.0, -401.0], [-370.5, -385.5], [-377.0, -379.5], [-378.0, -378.5], [-383.5, -384.5], [-386.0, -387.0], [-387.5, -388.5], [-390.5, -392.0], [-391.0, -392.0], [-396.0, -397.5]], [[-401.0, -388.5], [-394.0, -395.5], [-391.0, -392.0], [-390.5, -392.0], [-387.5, -388.5], [-386.0, -387.0], [-383.5, -384.5], [-378.0, -378.5], [-383.5, -372.5], [-385.0, -371.5], [-388.5, -375.0], [-399.5, -387.0]]], "ch": [[[52.5, -212.0], [41.0, -218.5], [23.5, -192.5], [26.5, -183.0], [48.5, -178.5], [49.5, -190.0], [43.5, -195.0], [52.5, -212.0]]]};
+const $=s=>document.querySelector(s);
+
+/* renderer */
+const renderer=new THREE.WebGLRenderer({antialias:true,logarithmicDepthBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.NeutralToneMapping;document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xcfdbe7);scene.fog=new THREE.Fog(0xcfdbe7,2500,9000);
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,1,20000);
+scene.add(new THREE.HemisphereLight(0xe6eef7,0x8d877d,1.6));const sun=new THREE.DirectionalLight(0xfff1dc,2.2);sun.position.set(-300,500,200);scene.add(sun);
+
+/* Google photorealistic tiles, reoriented so the Site Finder origin sits at 0,0,0 */
+const tiles=new TilesRenderer();
+tiles.registerPlugin(new GoogleCloudAuthPlugin({apiToken:KEY,autoRefreshToken:true}));
+const draco=new DRACOLoader().setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+tiles.registerPlugin(new GLTFExtensionsPlugin({dracoLoader:draco}));
+tiles.registerPlugin(new TileCompressionPlugin());tiles.registerPlugin(new UpdateOnChangePlugin());tiles.registerPlugin(new TilesFadePlugin());
+tiles.registerPlugin(new ReorientationPlugin({lat:ORIGIN.lat*Math.PI/180,lon:ORIGIN.lon*Math.PI/180,height:0,recenter:true}));
+const flat=new TileFlatteningPlugin();tiles.registerPlugin(flat);
+tiles.setCamera(camera);tiles.setResolutionFromRenderer(camera,renderer);scene.add(tiles.group);
+tiles.addEventListener('load-error',e=>{console.warn(e);showMsg('Google tiles did not load. If you have just created the API key it can take up to 5 minutes to start working; refresh shortly. The key only works from brikstudios3.github.io.')});
+
+/* the Site Finder frame is x east, z south; the tiles frame is x west, z north: rotate 180 degrees */
+const world=new THREE.Group();world.rotation.y=Math.PI;scene.add(world);
+const W=(x,y,z)=>new THREE.Vector3(-x,y,-z);
+
+const controls=new MapControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=1.5;controls.minDistance=20;controls.maxDistance=6000;controls.screenSpacePanning=false;
+
+/* brick textures for the proposed scheme, after The George and the Gannon Princes Street sketch */
+function brickCanvas(kind){const W=256,H=228,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+ if(kind==='mans'){g.fillStyle='#5a6067';g.fillRect(0,0,W,H);for(let x=0;x<W;x+=16){g.fillStyle='#4a4f55';g.fillRect(x,0,2,H)}g.fillStyle='#3f4349';g.fillRect(70,40,116,150);const gr=g.createLinearGradient(0,56,0,180);gr.addColorStop(0,'#b8c6d2');gr.addColorStop(1,'#33404c');g.fillStyle=gr;g.fillRect(82,56,92,124);return c}
+ g.fillStyle='#a3978a';g.fillRect(0,0,W,H);const ch=H/40,bw=W/16;for(let r=0;r<40;r++){const off=r%2?bw/2:0;for(let x=-bw;x<W+bw;x+=bw){const v=(Math.random()-.5)*30;g.fillStyle='rgb('+(142+v|0)+','+(59+v*.7|0)+','+(44+v*.6|0)+')';g.fillRect(x+off+1,r*ch+1,bw-1.8,ch-1.5)}}
+ const glass=(x,y,w,h)=>{g.fillStyle='rgba(25,10,5,.5)';g.fillRect(x-5,y-5,w+10,h+8);const gr=g.createLinearGradient(x,y,x+w*.6,y+h);gr.addColorStop(0,'#c7d4df');gr.addColorStop(.5,'#6f8396');gr.addColorStop(1,'#2e3a47');g.fillStyle=gr;g.fillRect(x,y,w,h);g.fillStyle='#2a2b2d';g.fillRect(x+w/2-1.5,y,3,h)};
+ if(kind==='brk'){glass(40,22,W-80,H-82);g.fillStyle='#e7ded0';g.fillRect(32,H-56,W-64,6);g.fillStyle='rgba(30,12,6,.3)';g.fillRect(40,H-46,W-80,30);g.fillStyle='#ddd2c2';g.fillRect(0,H-12,W,8)}
+ else if(kind==='shop'){g.fillStyle='#2a2b2d';g.fillRect(24,24,W-48,H-34);glass(30,30,W-60,H-46);g.fillStyle='#e3dccd';g.fillRect(0,H-10,W,10)}
+ for(const x of [0,W-18]){g.fillStyle='rgba(30,10,5,.35)';g.fillRect(x===0?18:W-21,0,3,H)}
+ return c}
+const TX={};for(const k of ['brk','shop','mans','plain']){const t=new THREE.CanvasTexture(brickCanvas(k));t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;TX[k]=t}
+const BAY=3.6,FLR=3.2;
+function area(p){let a=0;for(let i=0;i<p.length;i++){const q=p[i],r=p[(i+1)%p.length];a+=q[0]*r[1]-r[0]*q[1]}return a/2}
+function inset(ring,d){let cx=0,cz=0;for(const q of ring){cx+=q[0];cz+=q[1]}cx/=ring.length;cz/=ring.length;const A=Math.sqrt(Math.abs(area(ring)));const k=Math.max(.5,1-2*d/A);return ring.map(q=>[cx+(q[0]-cx)*k,cz+(q[1]-cz)*k])}
+function prism(group,ring,y0,h,tex,col,cap){const pos=[],uv=[];for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];const L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L<.2)continue;const n=Math.max(1,Math.round(L/BAY));const v=tex&&(tex===TX.shop||tex===TX.mans)?1:h/FLR;
+  for(const q of [[a,y0,0,0],[b,y0,n,0],[b,y0+h,n,v],[a,y0,0,0],[b,y0+h,n,v],[a,y0+h,0,v]]){const p=W(q[0][0],q[1],q[0][1]);pos.push(p.x,p.y,p.z);uv.push(q[2],q[3])}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();
+ group.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:col||0xffffff,map:tex||null,roughness:.85,side:THREE.DoubleSide})));
+ if(cap!=null){const tri=THREE.ShapeUtils.triangulateShape(ring.map(q=>new THREE.Vector2(q[0],q[1])),[]);const rp=[];for(const t of tri)for(const k of t){const p=W(ring[k][0],y0+h,ring[k][1]);rp.push(p.x,p.y,p.z)}const rg=new THREE.BufferGeometry();rg.setAttribute('position',new THREE.Float32BufferAttribute(rp,3));rg.computeVertexNormals();group.add(new THREE.Mesh(rg,new THREE.MeshStandardMaterial({color:cap,side:THREE.DoubleSide})))}}
+function mansard(group,ring,y0,h,d){const inner=inset(ring,d);const pos=[],uv=[];for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length],c=inner[(i+1)%ring.length],e=inner[i];const n=Math.max(1,Math.round(Math.hypot(b[0]-a[0],b[1]-a[1])/BAY));
+  for(const [q,y,u,v] of [[a,y0,0,0],[b,y0,n,0],[c,y0+h,n,1],[a,y0,0,0],[c,y0+h,n,1],[e,y0+h,0,1]]){const p=W(q[0],y,q[1]);pos.push(p.x,p.y,p.z);uv.push(u,v)}}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();group.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:TX.mans,roughness:.6,metalness:.15,side:THREE.DoubleSide})));prism(group,inner,y0+h,.05,null,0x50555b,0x50555b)}
+function piers(group,ring,y0,y1){const geo=[];for(let i=0;i<ring.length;i++){const a=ring[i],b=ring[(i+1)%ring.length];const L=Math.hypot(b[0]-a[0],b[1]-a[1]);if(L<2.5)continue;const n=Math.max(1,Math.round(L/BAY));const ux=(b[0]-a[0])/L,uz=(b[1]-a[1])/L;
+  for(let k=0;k<n;k++){const t=k*L/n;const bx=new THREE.BoxGeometry(.55,y1-y0,.64);const m=new THREE.Matrix4().makeRotationY(-Math.atan2(uz,ux));bx.applyMatrix4(m);const p=W(a[0]+ux*t,(y0+y1)/2,a[1]+uz*t);bx.translate(p.x,p.y,p.z);geo.push(bx)}}
+ for(const b of geo)group.add(new THREE.Mesh(b,new THREE.MeshStandardMaterial({color:0x7a3528,roughness:.9})))}
+function buildScheme(ring,st,gy,commercial){const g=new THREE.Group();if(area(ring)<0)ring=ring.slice().reverse();let y=gy;
+ if(commercial){prism(g,ring,y,4.4,TX.shop);y+=4.4}else{prism(g,ring,y,FLR,TX.brk);y+=FLR}
+ prism(g,inset(ring,-.12),y,.35,null,0xe3dccd);const brickFloors=Math.max(1,st-2);prism(g,ring,y,brickFloors*FLR,TX.brk);y+=brickFloors*FLR;
+ piers(g,ring,gy,y);prism(g,inset(ring,-.45),y,.55,null,0x6e3024,0x8f8a82);y+=.55;mansard(g,ring,y,FLR,1.8);return g}
+
+/* ground height at a site: lowest street level just outside the plot */
+const ray=new THREE.Raycaster();
+function groundAt(ring){let best=Infinity;const c=ring.reduce((a,q)=>[a[0]+q[0]/ring.length,a[1]+q[1]/ring.length],[0,0]);
+ for(const q of ring){const dx=q[0]-c[0],dz=q[1]-c[1],l=Math.hypot(dx,dz)||1;const p=W(q[0]+dx/l*6,800,q[1]+dz/l*6);ray.set(p,new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true)[0];if(h)best=Math.min(best,h.point.y)}
+ return isFinite(best)?best:null}
+
+/* sites */
+const SITEDEF=[{id:'base',n:'Princes Street',sub:'38 to 40 Princes Street, Stockport',rings:SITES.base,st:5,commercial:true,line:'Base model. 25 homes and 2 commercial units over five levels (Gannon Works feasibility).'},
+ {id:'ch',n:'Charter House',sub:'50 to 72 Churchgate',rings:SITES.ch,st:4,commercial:false,line:'Hall & Co, Ollier Smurthwaite. 27 homes, approved, under way. Sold exclusively by BRIK.'}];
+let current=null,schemeG=null,shapes=[],showScheme=true,clearExisting=true,pendingGround=0;
+function centre(rings){const all=rings.flat();return all.reduce((a,q)=>[a[0]+q[0]/all.length,a[1]+q[1]/all.length],[0,0])}
+function goTo(s,dist=220){current=s;const c=centre(s.rings);const t=W(c[0],60,c[1]);const p=W(c[0]+dist*.55,60+dist*.55,c[1]+dist*.75);camera.position.copy(p);controls.target.copy(t);controls.update();
+ document.querySelectorAll('#sites button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===s.id));
+ $('#info').innerHTML='<div class="k">'+s.sub+'</div><h3>'+s.n+'</h3>'+s.line;pendingGround=1;rebuild()}
+function rebuild(){if(schemeG){scene.remove(schemeG);schemeG=null}for(const m of shapes)flat.deleteShape(m);shapes=[];if(!current)return;
+ const gy=groundAt(current.rings.flat().length?current.rings[0]:[]);if(gy==null){pendingGround=1;return}pendingGround=0;
+ controls.target.y=gy+8;
+ if(showScheme){schemeG=new THREE.Group();for(const r of current.rings)schemeG.add(buildScheme(r,current.st,gy,current.commercial));scene.add(schemeG)}
+ if(clearExisting&&showScheme){tiles.group.updateMatrixWorld(true);const inv=tiles.group.matrixWorld.clone().invert();const up=new THREE.Vector3(0,1,0).transformDirection(inv);
+  for(const r of current.rings){const shp=new THREE.Shape(r.map(q=>{const p=W(q[0],0,q[1]);return new THREE.Vector2(p.x,-p.z)}));const geo=new THREE.ShapeGeometry(shp);geo.rotateX(-Math.PI/2);const m=new THREE.Mesh(geo);m.position.y=gy+.05;m.updateMatrixWorld();m.applyMatrix4(inv);m.updateMatrixWorld();flat.addShape(m,up,{threshold:Infinity});shapes.push(m)}}}
+for(const s of SITEDEF){const b=document.createElement('button');b.textContent=s.n;b.dataset.id=s.id;b.onclick=()=>goTo(s);$('#sites').appendChild(b)}
+$('#scheme').onclick=e=>{showScheme=!showScheme;e.target.setAttribute('aria-pressed',showScheme);rebuild()};
+$('#flat').onclick=e=>{clearExisting=!clearExisting;e.target.setAttribute('aria-pressed',clearExisting);rebuild()};
+
+function showMsg(t){$('#msg').textContent=t;$('#msg').style.display='block'}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);tiles.setResolutionFromRenderer(camera,renderer)});
+
+/* open on the site asked for, or a point passed from the Site Finder */
+const q=new URLSearchParams(location.search);
+const start=SITEDEF.find(s=>s.id===q.get('site'));
+if(q.has('x')&&q.has('z')&&!start){const x=+q.get('x'),z=+q.get('z');current=null;camera.position.copy(W(x+160,220,z+200));controls.target.copy(W(x,40,z));controls.update();$('#info').innerHTML='<div class="k">From Site Finder</div><h3>Selected area</h3>Drag to pan, right drag to orbit, scroll to zoom.'}
+else goTo(start||SITEDEF[0]);
+
+let frame=0;
+function loop(){requestAnimationFrame(loop);controls.update();camera.updateMatrixWorld();tiles.update();
+ frame++;if(pendingGround&&frame%30===0)rebuild();
+ if(frame%60===0){const a=tiles.getAttributions?tiles.getAttributions():[];$('#credits').textContent=a.filter(x=>x.type==='string').map(x=>x.value).join('; ')}
+ renderer.render(scene,camera)}
+loop();
+</script></body></html>
