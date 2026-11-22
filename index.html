@@ -96,16 +96,16 @@ function buildScheme(ring,st,gy,commercial){const g=new THREE.Group();if(area(ri
 
 /* ground height at a site: lowest street level just outside the plot */
 const ray=new THREE.Raycaster();
-function groundAt(ring){let best=Infinity;const c=ring.reduce((a,q)=>[a[0]+q[0]/ring.length,a[1]+q[1]/ring.length],[0,0]);
- for(const q of ring){const dx=q[0]-c[0],dz=q[1]-c[1],l=Math.hypot(dx,dz)||1;const p=W(q[0]+dx/l*6,800,q[1]+dz/l*6);ray.set(p,new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true)[0];if(h)best=Math.min(best,h.point.y)}
- return isFinite(best)?best:null}
+function groundAt(ring){const ys=[];const c=ring.reduce((a,q)=>[a[0]+q[0]/ring.length,a[1]+q[1]/ring.length],[0,0]);
+ for(const q of ring){const dx=q[0]-c[0],dz=q[1]-c[1],l=Math.hypot(dx,dz)||1;const p=W(q[0]+dx/l*6,900,q[1]+dz/l*6);ray.set(p,new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true).find(h=>h.point.y>-60&&h.point.y<400);if(h)ys.push(h.point.y)}
+ if(ys.length<Math.max(3,ring.length/2))return null;ys.sort((a,b)=>a-b);return ys[Math.floor(ys.length/4)]}
 
 /* sites */
 const SITEDEF=[{id:'base',n:'Princes Street',sub:'38 to 40 Princes Street, Stockport',rings:SITES.base,st:5,commercial:true,line:'Base model. 25 homes and 2 commercial units over five levels (Gannon Works feasibility).'},
  {id:'ch',n:'Charter House',sub:'50 to 72 Churchgate',rings:SITES.ch,st:4,commercial:false,line:'Hall & Co, Ollier Smurthwaite. 27 homes, approved, under way. Sold exclusively by BRIK.'}];
 let current=null,schemeG=null,shapes=[],showScheme=true,clearExisting=true,pendingGround=0;
 function centre(rings){const all=rings.flat();return all.reduce((a,q)=>[a[0]+q[0]/all.length,a[1]+q[1]/all.length],[0,0])}
-function goTo(s,dist=220){current=s;s._fly=dist;const c=centre(s.rings);const t=W(c[0],60,c[1]);const p=W(c[0]+dist*.55,60+dist*.55,c[1]+dist*.75);camera.position.copy(p);controls.target.copy(t);controls.update();
+function goTo(s,dist=220){current=s;s._fly=dist;const c=centre(s.rings);const t=W(c[0],90,c[1]);const p=W(c[0]+dist*.5,90+dist*.9,c[1]+dist*.7);camera.position.copy(p);controls.target.copy(t);controls.update();
  document.querySelectorAll('#sites button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===s.id));
  $('#info').innerHTML='<div class="k">'+s.sub+'</div><h3>'+s.n+'</h3>'+s.line;pendingGround=1;rebuild()}
 function rebuild(){if(schemeG){scene.remove(schemeG);schemeG=null}for(const m of shapes)flat.deleteShape(m);shapes=[];if(!current)return;
@@ -124,13 +124,13 @@ addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updat
 /* open on the site asked for, or a point passed from the Site Finder */
 const q=new URLSearchParams(location.search);
 const start=SITEDEF.find(s=>s.id===q.get('site'));
-if(q.has('x')&&q.has('z')&&!start){const x=+q.get('x'),z=+q.get('z');current=null;camera.position.copy(W(x+160,220,z+200));controls.target.copy(W(x,40,z));controls.update();$('#info').innerHTML='<div class="k">From Site Finder</div><h3>Selected area</h3>Drag to pan, right drag to orbit, scroll to zoom.'}
+if(q.has('x')&&q.has('z')&&!start){const x=+q.get('x'),z=+q.get('z');current=null;camera.position.copy(W(x+110,320,z+150));controls.target.copy(W(x,90,z));controls.update();$('#info').innerHTML='<div class="k">From Site Finder</div><h3>Selected area</h3>Drag to pan, right drag to orbit, scroll to zoom.'}
 else goTo(start||SITEDEF[0]);
 
 let frame=0,ptFly=q.has('x')&&q.has('z')&&!start;window.__v={camera,controls,tiles,scene};
 function loop(){requestAnimationFrame(loop);controls.update();camera.updateMatrixWorld();tiles.update();
  frame++;if(pendingGround&&frame%30===0)rebuild();
- if(ptFly&&frame%30===0){const t=controls.target;ray.set(new THREE.Vector3(t.x,900,t.z),new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true)[0];if(h){const dy=h.point.y+6-t.y;t.y+=dy;camera.position.y+=dy;controls.update();ptFly=false}}
+ if(ptFly&&frame%30===0){const t=controls.target;ray.set(new THREE.Vector3(t.x,900,t.z),new THREE.Vector3(0,-1,0));const h=ray.intersectObject(tiles.group,true).find(h=>h.point.y>-60&&h.point.y<400);if(h){const dy=h.point.y+6-t.y;t.y+=dy;camera.position.y+=dy;controls.update();ptFly=false}}
  if(frame%60===0){const a=tiles.getAttributions?tiles.getAttributions():[];$('#credits').textContent=a.filter(x=>x.type==='string').map(x=>x.value).join('; ')}
  renderer.render(scene,camera)}
 loop();
